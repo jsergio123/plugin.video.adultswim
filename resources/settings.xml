@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="General">
+        <setting id="autoplay" type="bool" label="Auto Play" default="true" />
+        <setting id="display_locked" type="bool" label="Display Locked Episodes" default="false" />
+        <setting id="getmeta" type="bool" label="MetaData" default="true" />
+    </category>
+</settings>
