@@ -1,3 +1,7 @@
+Version 1.0.6
+- Code cosmetics
+- Created strings.po
+
 Version 1.0.4
 - MetaData enabled
 - Fixed fanart and thumbnails for episodes

@@ -1,65 +1,76 @@
 # -*- coding: utf-8 -*-
 # KodiAddon (Adult Swim)
 #
-from t1mlib import t1mAddon
+import json
+import re
+import sys
+import time
+import xbmc
+import xbmcaddon
+import xbmcgui
+import xbmcplugin
 from operator import itemgetter
-from metahandler import metahandlers,metacontainers
-import json, re, urllib, urllib2, xbmcaddon, xbmcplugin, xbmcgui, xbmc, time, sys, os
 
-metaget = metahandlers.MetaData(preparezip=False)
+from metahandler import metahandlers
+from t1mlib import t1mAddon
+
+metaget = metahandlers.MetaData(preparezip=False,
+                                tmdb_api_key="ZjIxMjg2ODU4Zjg0Zjc1NWUwZTlkOTJmMWExZjUxYWU=".decode('base64'))
+lang = xbmcaddon.Addon().getLocalizedString
+addon_name = xbmcaddon.Addon().getAddonInfo("name")
 
 
 class myAddon(t1mAddon):
     def getAddonMenu(self, url, ilist):
         xbmcplugin.setContent(int(sys.argv[1]), 'tvshows')
-        epiHTML = self.getRequest('http://www.adultswim.com/videos')
-        shows = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", epiHTML).groups()[0]
+        response = self.getRequest('http://www.adultswim.com/videos')
+        shows = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", response).groups()[0]
         shows = json.loads(shows.replace("\/", "/"))
         shows = shows["shows"]
         getmeta = xbmcaddon.Addon().getSetting("getmeta")
-        
-        blacklist = ["live simulcast", "music videos", "on cinema", "promos", "shorts", 'williams street swap shop', 'stupid morning bullshit', 'last stream on the left', 'fishcenter live', 'convention panels']
-        
+
+        blacklist = ["live simulcast", "music videos", "on cinema", "promos", "shorts", 'williams street swap shop',
+                     "stupid morning bullshit", 'last stream on the left', 'fishcenter live', 'convention panels']
+
         if getmeta == 'true':
             i = 0
             total = len(shows)
-            pDialog = xbmcgui.DialogProgressBG()
-            pDialog.create('MetaData Progress', '')
-            pDialog.update(i, 'MetaData Progress', 'Retrieving MetaData Information')
-        
+            p_dialog = xbmcgui.DialogProgressBG()
+            p_dialog.create(lang(34001).encode('utf-8'), '')
+            p_dialog.update(i, lang(34001).encode('utf-8'), lang(34002).encode('utf-8'))
+
         for show in shows:
             name = show["title"].encode("utf-8")
             if not any(x in name.lower() for x in blacklist):
-                contextMenu = []
+                context_menu = []
                 if getmeta == 'true':
-                    infoList = metaget.get_meta('tvshow', name=name)
-                    contextMenu.append(('View TV Show Info', 'Action(Info)'))
-                    poster = infoList['cover_url']
-                    if poster == '': poster = self.addonIcon
-                    fanart = infoList['backdrop_url']
-                    if fanart == '': fanart = self.addonFanart
+                    info_list = metaget.get_meta('tvshow', name=name)
+                    context_menu.append((lang(34003).encode('utf-8'), 'Action(Info)'))
+                    poster = info_list['cover_url']
+                    if poster == '':
+                        poster = self.addonIcon
+                    fanart = info_list['backdrop_url']
+                    if fanart == '':
+                        fanart = self.addonFanart
                     i += 1
-                    percent = int( ( (i) / float(total) ) * 100)
-                    pDialog.update(percent, 'MetaData Progress', 'Retrieving MetaData Information')
+                    percent = int((i / float(total)) * 100)
+                    p_dialog.update(percent, lang(34001).encode('utf-8'), lang(34002).encode('utf-8'))
                 else:
                     poster = self.addonIcon
                     fanart = self.addonFanart
-                    infoList = {}
-                    infoList['Title'] = name
-                    infoList['TVShowTitle'] = name
-                    infoList['mediatype'] = 'tvshow'
-                    infoList['Studio'] = 'Adult Swim'
-                    
-                url = 'http://www.adultswim.com' + show["url"]
-                ilist = self.addMenuItem(name, 'GE', ilist, url, poster, fanart, infoList, isFolder=True, cm=contextMenu)
+                    info_list = {'Title': name, 'TVShowTitle': name, 'mediatype': 'tvshow', 'Studio': 'Adult Swim'}
+
+                response = 'http://www.adultswim.com' + show["url"]
+                ilist = self.addMenuItem(name, 'GE', ilist, response, poster, fanart, info_list, isFolder=True,
+                                         cm=context_menu)
             else:
                 continue
-                
+
         if getmeta == 'true':
-            try: pDialog.close()
+            try: p_dialog.close()
             except: pass
-                
-        return(ilist)
+
+        return ilist
 
     def getAddonEpisodes(self, url, ilist):
         html = self.getRequest(url)
@@ -67,7 +78,7 @@ class myAddon(t1mAddon):
         epis = json.loads(epis.replace("\/", "/"))
         show = epis["show"]
         epis = show["videos"]
-        #epis = sorted(epis, key=itemgetter('launch_date'))
+        # epis = sorted(epis, key=itemgetter('launch_date'))
         display_locked = xbmcaddon.Addon().getSetting("display_locked")
 
         for epi in epis:
@@ -99,9 +110,10 @@ class myAddon(t1mAddon):
                     ilist = self.addMenuItem(name, 'GV', ilist, url, thumb, fanart, infoList, isFolder=False)
 
         if len(ilist) == 0:
-            ilist = self.addMenuItem("No episodes available to stream", 'GV', ilist, '', self.addonIcon, self.addonFanart, '', isFolder=False)
+            ilist = self.addMenuItem(lang(34004).encode('utf-8'), 'GV', ilist, '', self.addonIcon,
+                                     self.addonFanart, '', isFolder=False)
 
-        return(ilist)
+        return ilist
 
     def getAddonVideo(self, url):
         ep_id = url
@@ -112,35 +124,28 @@ class myAddon(t1mAddon):
         sources = [(source[0], source[1]) for source in set(sources) if not urlparse(source[1]).path.split('/')[-1].endswith(".f4m")]
         sources = sorted(sources, key=itemgetter(0))
         autoplay = xbmcaddon.Addon().getSetting("autoplay")
-        totalSrcs = len(sources)
-        if totalSrcs > 1 and autoplay == 'false':
+        total_srcs = len(sources)
+        if total_srcs > 1 and autoplay == 'false':
             dialog = xbmcgui.Dialog()
-            src = dialog.select('Choose a stream', [str(i[0]).encode("utf-8") for i in sources])
+            src = dialog.select(lang(34005).encode('utf-8'), [str(i[0]).encode("utf-8") for i in sources])
             if src == -1:
-                dialog.notification("Adult Swim", 'Stream selection canceled', xbmcgui.NOTIFICATION_WARNING, 3000)
+                dialog.notification(addon_name, lang(34006).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
                 return
             else:
                 u = sources[src][1]
-        elif totalSrcs == 1 or (totalSrcs > 1 and autoplay == 'true'):
+        elif total_srcs == 1 or (total_srcs > 1 and autoplay == 'true'):
             u = sources[0][1]
-        else: 
+        else:
             dialog = xbmcgui.Dialog()
-            dialog.notification("Adult Swim", 'No playable streams found', xbmcgui.NOTIFICATION_WARNING, 3000)
+            dialog.notification(addon_name, lang(34007).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
             return
         liz = xbmcgui.ListItem(path = u)
-        infoList ={}
-        infoList['mediatype'] = xbmc.getInfoLabel('ListItem.DBTYPE')
-        infoList['Title'] = xbmc.getInfoLabel('ListItem.Title')
-        infoList['TVShowTitle'] = xbmc.getInfoLabel('ListItem.TVShowTitle')
-        infoList['Year'] = xbmc.getInfoLabel('ListItem.Year')
-        infoList['Premiered'] = xbmc.getInfoLabel('Premiered')
-        infoList['Plot'] = xbmc.getInfoLabel('ListItem.Plot')
-        infoList['Studio'] = xbmc.getInfoLabel('ListItem.Studio')
-        infoList['Genre'] = xbmc.getInfoLabel('ListItem.Genre')
-        infoList['Duration'] = xbmc.getInfoLabel('ListItem.Duration')
-        infoList['MPAA'] = xbmc.getInfoLabel('ListItem.Mpaa')
-        infoList['Aired'] = xbmc.getInfoLabel('ListItem.Aired')
-        infoList['Season'] = xbmc.getInfoLabel('ListItem.Season')
-        infoList['Episode'] = xbmc.getInfoLabel('ListItem.Episode')
-        liz.setInfo('video', infoList)
+        info_list = {'mediatype': xbmc.getInfoLabel('ListItem.DBTYPE'), 'Title': xbmc.getInfoLabel('ListItem.Title'),
+                     'TVShowTitle': xbmc.getInfoLabel('ListItem.TVShowTitle'),
+                     'Year': xbmc.getInfoLabel('ListItem.Year'), 'Premiered': xbmc.getInfoLabel('Premiered'),
+                     'Plot': xbmc.getInfoLabel('ListItem.Plot'), 'Studio': xbmc.getInfoLabel('ListItem.Studio'),
+                     'Genre': xbmc.getInfoLabel('ListItem.Genre'), 'Duration': xbmc.getInfoLabel('ListItem.Duration'),
+                     'MPAA': xbmc.getInfoLabel('ListItem.Mpaa'), 'Aired': xbmc.getInfoLabel('ListItem.Aired'),
+                     'Season': xbmc.getInfoLabel('ListItem.Season'), 'Episode': xbmc.getInfoLabel('ListItem.Episode')}
+        liz.setInfo('video', info_list)
         xbmcplugin.setResolvedUrl(int(sys.argv[1]), True, liz)
