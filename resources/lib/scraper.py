@@ -22,9 +22,11 @@ class myAddon(t1mAddon):
     def getAddonMenu(self, url, ilist):
         xbmcplugin.setContent(int(sys.argv[1]), 'tvshows')
         response = self.getRequest('http://www.adultswim.com/videos')
-        shows = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", response).groups()[0]
+#       shows = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", response).groups()[0]
+        shows = re.search("""__AS_INITIAL_STATE__\s*=\s*({.*?})</script>""", response).groups()[0]		
         shows = json.loads(shows.replace("\/", "/"))
-        shows = shows["shows"]
+#       shows = shows["shows"]
+        shows = shows["showsIndex"]["shows"]
         getmeta = xbmcaddon.Addon().getSetting("getmeta")
 
         blacklist = ["live simulcast", "music videos", "on cinema", "promos", "shorts", 'williams street swap shop',
