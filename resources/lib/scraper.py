@@ -22,11 +22,9 @@ class myAddon(t1mAddon):
     def getAddonMenu(self, url, ilist):
         xbmcplugin.setContent(int(sys.argv[1]), 'tvshows')
         response = self.getRequest('http://www.adultswim.com/videos')
-#       shows = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", response).groups()[0]
-        shows = re.search("""__AS_INITIAL_STATE__\s*=\s*({.*?})</script>""", response).groups()[0]		
-        shows = json.loads(shows.replace("\/", "/"))
-#       shows = shows["shows"]
-        shows = shows["showsIndex"]["shows"]
+        data = re.search("""__AS_INITIAL_STATE__\s*=\s*({.*?})</script>""", response).groups()[0]
+        data = json.loads(data.replace("\/", "/"))
+        shows = data.get("showsIndex").get("shows", [])
         getmeta = xbmcaddon.Addon().getSetting("getmeta")
 
         blacklist = ["live simulcast", "music videos", "on cinema", "promos", "shorts", 'williams street swap shop',
@@ -40,27 +38,28 @@ class myAddon(t1mAddon):
             p_dialog.update(i, lang(34001).encode('utf-8'), lang(34002).encode('utf-8'))
 
         for show in shows:
-            name = show["title"].encode("utf-8")
+            name = show.get("title", "No Title").encode("utf-8")
             if not any(x in name.lower() for x in blacklist):
                 context_menu = []
                 if getmeta == 'true':
                     info_list = MetaData().get_meta(name=name)
                     context_menu.append((lang(34003).encode('utf-8'), 'Action(Info)'))
-                    poster = info_list['cover_url']
+                    poster = info_list.get('cover_url')
                     if poster == '':
-                        poster = self.addonIcon
-                    fanart = info_list['backdrop_url']
+                        poster = show.get("poster", self.addonIcon)
+                    fanart = info_list.get('backdrop_url')
                     if fanart == '':
                         fanart = self.addonFanart
                     i += 1
                     percent = int((i / float(total)) * 100)
                     p_dialog.update(percent, lang(34001).encode('utf-8'), lang(34002).encode('utf-8'))
                 else:
-                    poster = self.addonIcon
+                    poster = show.get("poster", self.addonIcon)
                     fanart = self.addonFanart
-                    info_list = {'Title': name, 'TVShowTitle': name, 'mediatype': 'tvshow', 'Studio': 'Adult Swim'}
+                    info_list = {'Title': name, 'TVShowTitle': name, 'mediatype': 'tvshow', 'Studio': 'Adult Swim',
+                                 'cover_url': poster, 'backdrop_url': fanart}
 
-                response = 'http://www.adultswim.com' + show["url"]
+                response = 'http://www.adultswim.com%s' % show.get("url")
                 ilist = self.addMenuItem(name, 'GE', ilist, response, poster, fanart, info_list, isFolder=True,
                                          cm=context_menu)
             else:
@@ -74,39 +73,34 @@ class myAddon(t1mAddon):
 
     def getAddonEpisodes(self, url, ilist):
         html = self.getRequest(url)
-        epis = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", html).groups()[0]
-        epis = json.loads(epis.replace("\/", "/"))
-        show = epis["show"]
-        epis = show["videos"]
-        # epis = sorted(epis, key=itemgetter('launch_date'))
+        data = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", html).groups()[0]
+        data = json.loads(data.replace("\/", "/"))
+        show = data.get("show")
+        episodes = show.get("videos", [])
+        # episodes = sorted(epis, key=itemgetter('launch_date'))
         display_locked = xbmcaddon.Addon().getSetting("display_locked")
 
-        for epi in epis:
-            if epi["type"] == 'episode':
-                if display_locked == 'false' and epi["auth"]: continue
+        for episode in episodes:
+            if episode.get("type") == 'episode':
+                if display_locked == 'false' and episode.get("auth", False):
+                    continue
                 else:
-                    name = epi['title'].encode("utf-8")
-                    name = name if not epi.get("auth", False) else "[COLOR red]%s[/COLOR]" % name
-                    try: fanart = show["heroImage"] if not show.get("heroImage", "") == "" else self.addonFanart
-                    except: fanart = self.addonFanart
-                    try: thumb = epi["poster"] if not epi.get("poster", "") == "" else show["metadata"]["thumbnail"]
-                    except: thumb = self.addonIcon
+                    name = episode.get('title').encode("utf-8")
+                    name = name if not episode.get("auth", False) else "[COLOR red]%s[/COLOR]" % name
+                    fanart = show.get("heroImage", self.addonFanart)
+                    thumb = episode.get("poster", show.get("metadata").get("thumbnail"))
                     infoList = {}
-                    try: infoList['Date'] = time.strftime('%Y-%m-%d', time.localtime(int(epi['launch_date'])))
-                    except: infoList['Date'] = time.strftime('%Y-%m-%d', time.localtime(int(epi['auth_launch_date'])))
+                    infoList['Date'] = time.strftime('%Y-%m-%d', time.localtime(int(episode.get('launch_date', episode.get('auth_launch_date', 0)))))
                     infoList['Aired'] = infoList['Date']
-                    infoList['Duration'] = str(int(epi.get('duration', '0')))
-                    infoList['MPAA'] = epi.get('tv_rating', 'N/A')
-                    try: infoList['TVShowTitle'] = epi['collection_title']
-                    except: pass
+                    infoList['Duration'] = str(int(episode.get('duration', '99999')))
+                    infoList['MPAA'] = episode.get('tv_rating', 'N/A')
+                    infoList['TVShowTitle'] = episode.get('collection_title')
                     infoList['Title'] = name
-                    try: infoList['Episode'] = epi["episode_number"]
-                    except: pass
-                    try: infoList['Season'] = epi["season_number"]
-                    except: pass
-                    infoList['Plot'] = epi.get("description", "").encode("utf-8")
+                    infoList['Episode'] = episode.get("episode_number")
+                    infoList['Season'] = episode.get("season_number")
+                    infoList['Plot'] = episode.get("description", "").encode("utf-8")
                     infoList['mediatype'] = 'episode'
-                    url = epi["id"]
+                    url = episode.get("id")
                     ilist = self.addMenuItem(name, 'GV', ilist, url, thumb, fanart, infoList, isFolder=False)
 
         if len(ilist) == 0:
