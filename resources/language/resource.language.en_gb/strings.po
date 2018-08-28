@@ -54,7 +54,7 @@ msgid "No unlocked episodes available to stream"
 msgstr ""
 
 msgctxt "#34005"
-msgid "Choose a stream"
+msgid "Choose a Bitrate"
 msgstr ""
 
 msgctxt "#34006"

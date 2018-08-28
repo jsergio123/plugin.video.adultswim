@@ -9,7 +9,7 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 import xbmcplugin
-from operator import itemgetter
+# from operator import itemgetter
 
 from metahandler import MetaData
 from t1mlib import t1mAddon
@@ -24,7 +24,7 @@ class myAddon(t1mAddon):
         response = self.getRequest('http://www.adultswim.com/videos')
         data = re.search("""__AS_INITIAL_STATE__\s*=\s*({.*?})</script>""", response).groups()[0]
         data = json.loads(data.replace("\/", "/"))
-        shows = data.get("showsIndex").get("shows", [])
+        shows = data.get("showsIndex").get("shows")
         getmeta = xbmcaddon.Addon().getSetting("getmeta")
 
         blacklist = ["live simulcast", "music videos", "on cinema", "promos", "shorts", 'williams street swap shop',
@@ -76,8 +76,8 @@ class myAddon(t1mAddon):
         data = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", html).groups()[0]
         data = json.loads(data.replace("\/", "/"))
         show = data.get("show")
-        episodes = show.get("videos", [])
-        # episodes = sorted(epis, key=itemgetter('launch_date'))
+        episodes = show.get("videos")
+        # episodes = sorted(episodes, key=itemgetter('launch_date'))
         display_locked = xbmcaddon.Addon().getSetting("display_locked")
 
         for episode in episodes:
@@ -110,13 +110,14 @@ class myAddon(t1mAddon):
         return ilist
 
     def getAddonVideo(self, url):
-        ep_id = url
-        api_url = 'http://www.adultswim.com/videos/api/v0/assets?platform=desktop&id=%s&phds=true' % ep_id
+        api_url = 'http://www.adultswim.com/videos/api/v3/videos/%s?fields=title,type,duration,collection_title,poster,stream,segments,title_id' % url
         api_data = self.getRequest(api_url)
-        sources = re.findall("""<file .*?type="([^"]+).+?>([^<\s]+)""", api_data)
-        from urlparse import urlparse
-        sources = [(source[0], source[1]) for source in set(sources) if not urlparse(source[1]).path.split('/')[-1].endswith(".f4m")]
-        sources = sorted(sources, key=itemgetter(0))
+        api_data = json.loads(api_data)
+        urls = api_data.get('data').get('stream').get('assets')
+        url = [url.get('url') for url in urls if url.get('mime_type') == 'application/x-mpegURL' and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))][0]
+        sources = self.getRequest(url)
+        sources = re.findall('BANDWIDTH=(\d+).+?\n([^#\s]+)', sources, re.I)
+        sources = sorted(sources, key=lambda x: int(x[0]), reverse=True)
         autoplay = xbmcaddon.Addon().getSetting("autoplay")
         total_srcs = len(sources)
         if total_srcs > 1 and autoplay == 'false':
@@ -126,9 +127,9 @@ class myAddon(t1mAddon):
                 dialog.notification(addon_name, lang(34006).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
                 return
             else:
-                u = sources[src][1]
+                u = '%s/%s' % (url.rsplit('/', 1).pop(0), sources[src][1].strip())
         elif total_srcs == 1 or (total_srcs > 1 and autoplay == 'true'):
-            u = sources[0][1]
+            u = '%s/%s' % (url.rsplit('/', 1).pop(0), sources[0][1].strip())
         else:
             dialog = xbmcgui.Dialog()
             dialog.notification(addon_name, lang(34007).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
