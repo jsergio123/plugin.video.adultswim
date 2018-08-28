@@ -114,13 +114,13 @@ class myAddon(t1mAddon):
         api_data = self.getRequest(api_url)
         api_data = json.loads(api_data)
         urls = api_data.get('data').get('stream').get('assets')
-        url = [url.get('url') for url in urls if url.get('mime_type') == 'application/x-mpegURL' and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))][0]
-        sources = self.getRequest(url)
-        sources = re.findall('BANDWIDTH=(\d+).+?\n([^#\s]+)', sources, re.I)
-        sources = sorted(sources, key=lambda x: int(x[0]), reverse=True)
+        url = [url.get('url') for url in urls if url.get('mime_type') == 'application/x-mpegURL'
+               and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))][0]
         autoplay = xbmcaddon.Addon().getSetting("autoplay")
-        total_srcs = len(sources)
-        if total_srcs > 1 and autoplay == 'false':
+        if url and autoplay == 'false':
+            sources = self.getRequest(url)
+            sources = re.findall('BANDWIDTH=(\d+).+?\n([^#\s]+)', sources, re.I)
+            sources = sorted(sources, key=lambda x: int(x[0]), reverse=True)
             dialog = xbmcgui.Dialog()
             src = dialog.select(lang(34005).encode('utf-8'), [str(i[0]).encode("utf-8") for i in sources])
             if src == -1:
@@ -128,8 +128,8 @@ class myAddon(t1mAddon):
                 return
             else:
                 u = '%s/%s' % (url.rsplit('/', 1).pop(0), sources[src][1].strip())
-        elif total_srcs == 1 or (total_srcs > 1 and autoplay == 'true'):
-            u = '%s/%s' % (url.rsplit('/', 1).pop(0), sources[0][1].strip())
+        elif url and autoplay == 'true':
+            u = url
         else:
             dialog = xbmcgui.Dialog()
             dialog.notification(addon_name, lang(34007).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
