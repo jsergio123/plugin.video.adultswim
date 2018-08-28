@@ -92,9 +92,12 @@ class myAddon(t1mAddon):
                     fanart = show.get("heroImage", self.addonFanart)
                     thumb = episode.get("poster", show.get("metadata").get("thumbnail"))
                     infoList = {}
-                    infoList['Date'] = time.strftime('%Y-%m-%d', time.localtime(int(episode.get('launch_date', episode.get('auth_launch_date', 0)))))
-                    infoList['Aired'] = infoList['Date']
-                    infoList['Duration'] = str(int(episode.get('duration', '99999')))
+                    infoList['Date'] = episode.get('launch_date')
+                    if not infoList['Date']:
+                        infoList['Date'] = episode.get('auth_launch_date')
+                    if isinstance(infoList['Date'], int):
+                        infoList['Aired'] = time.strftime('%Y-%m-%d', time.localtime(infoList['Date']))
+                    infoList['Duration'] = episode.get('duration')
                     infoList['MPAA'] = episode.get('tv_rating', 'N/A')
                     infoList['TVShowTitle'] = episode.get('collection_title')
                     infoList['Title'] = name
@@ -117,10 +120,10 @@ class myAddon(t1mAddon):
         api_data = json.loads(html)
         urls = api_data.get('data').get('stream').get('assets')
         source = [url.get('url') for url in urls if url.get('mime_type') == 'application/x-mpegURL'
-                  and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))][0]
+                  and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))]
         autoplay = xbmcaddon.Addon().getSetting("autoplay")
         if source and autoplay == 'false':
-            hls = self.getRequest(source)
+            hls = self.getRequest(source[0])
             sources = re.findall('BANDWIDTH=(\d+).*?RESOLUTION=([\dx]+).*?\n([^#\s]+)', hls, re.I)
             sources = sorted(sources, key=lambda x: int(x[0]), reverse=True)
             dialog = xbmcgui.Dialog()
@@ -131,9 +134,9 @@ class myAddon(t1mAddon):
                 dialog.notification(addon_name, lang(34006).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
                 return
             else:
-                u = '%s/%s' % (source.rsplit('/', 1).pop(0), sources[src][2].strip())
+                u = '%s/%s' % (source[0].rsplit('/', 1).pop(0), sources[src][2].strip())
         elif source and autoplay == 'true':
-            u = source
+            u = source[0]
         else:
             dialog = xbmcgui.Dialog()
             dialog.notification(addon_name, lang(34007).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
