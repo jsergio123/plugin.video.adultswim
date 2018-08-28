@@ -21,8 +21,8 @@ addon_name = xbmcaddon.Addon().getAddonInfo("name")
 class myAddon(t1mAddon):
     def getAddonMenu(self, url, ilist):
         xbmcplugin.setContent(int(sys.argv[1]), 'tvshows')
-        response = self.getRequest('http://www.adultswim.com/videos')
-        data = re.search("""__AS_INITIAL_STATE__\s*=\s*({.*?})</script>""", response).groups()[0]
+        html = self.getRequest('http://www.adultswim.com/videos')
+        data = re.search("""__AS_INITIAL_STATE__\s*=\s*({.+?})</script>""", html).groups()[0]
         data = json.loads(data.replace("\/", "/"))
         shows = data.get("showsIndex").get("shows")
         getmeta = xbmcaddon.Addon().getSetting("getmeta")
@@ -66,14 +66,16 @@ class myAddon(t1mAddon):
                 continue
 
         if getmeta == 'true':
-            try: p_dialog.close()
-            except: pass
+            try:
+                p_dialog.close()
+            except:
+                pass
 
         return ilist
 
     def getAddonEpisodes(self, url, ilist):
         html = self.getRequest(url)
-        data = re.search("""__AS_INITIAL_DATA__\s*=\s*({.*?});""", html).groups()[0]
+        data = re.search("""__AS_INITIAL_DATA__\s*=\s*({.+?});""", html).groups()[0]
         data = json.loads(data.replace("\/", "/"))
         show = data.get("show")
         episodes = show.get("videos")
@@ -111,30 +113,32 @@ class myAddon(t1mAddon):
 
     def getAddonVideo(self, url):
         api_url = 'http://www.adultswim.com/videos/api/v3/videos/%s?fields=title,type,duration,collection_title,poster,stream,segments,title_id' % url
-        api_data = self.getRequest(api_url)
-        api_data = json.loads(api_data)
+        html = self.getRequest(api_url)
+        api_data = json.loads(html)
         urls = api_data.get('data').get('stream').get('assets')
-        url = [url.get('url') for url in urls if url.get('mime_type') == 'application/x-mpegURL'
-               and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))][0]
+        source = [url.get('url') for url in urls if url.get('mime_type') == 'application/x-mpegURL'
+                  and (url.get('url').endswith("stream_full.m3u8") or url.get('url').endswith("/stream.m3u8"))][0]
         autoplay = xbmcaddon.Addon().getSetting("autoplay")
-        if url and autoplay == 'false':
-            sources = self.getRequest(url)
-            sources = re.findall('BANDWIDTH=(\d+).+?\n([^#\s]+)', sources, re.I)
+        if source and autoplay == 'false':
+            hls = self.getRequest(source)
+            sources = re.findall('BANDWIDTH=(\d+).*?RESOLUTION=([\dx]+).*?\n([^#\s]+)', hls, re.I)
             sources = sorted(sources, key=lambda x: int(x[0]), reverse=True)
             dialog = xbmcgui.Dialog()
-            src = dialog.select(lang(34005).encode('utf-8'), [str(i[0]).encode("utf-8") for i in sources])
+            src = dialog.select(lang(34005).encode('utf-8'),
+                                [str("[COLOR lawngreen]%s[/COLOR] (%skbps)" % (i[1], int(i[0]) / 1000)).encode("utf-8") for
+                                 i in sources])
             if src == -1:
                 dialog.notification(addon_name, lang(34006).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
                 return
             else:
-                u = '%s/%s' % (url.rsplit('/', 1).pop(0), sources[src][1].strip())
-        elif url and autoplay == 'true':
-            u = url
+                u = '%s/%s' % (source.rsplit('/', 1).pop(0), sources[src][2].strip())
+        elif source and autoplay == 'true':
+            u = source
         else:
             dialog = xbmcgui.Dialog()
             dialog.notification(addon_name, lang(34007).encode('utf-8'), xbmcgui.NOTIFICATION_WARNING, 3000)
             return
-        liz = xbmcgui.ListItem(path = u)
+        item = xbmcgui.ListItem(path=u)
         info_list = {'mediatype': xbmc.getInfoLabel('ListItem.DBTYPE'), 'Title': xbmc.getInfoLabel('ListItem.Title'),
                      'TVShowTitle': xbmc.getInfoLabel('ListItem.TVShowTitle'),
                      'Year': xbmc.getInfoLabel('ListItem.Year'), 'Premiered': xbmc.getInfoLabel('Premiered'),
@@ -142,5 +146,5 @@ class myAddon(t1mAddon):
                      'Genre': xbmc.getInfoLabel('ListItem.Genre'), 'Duration': xbmc.getInfoLabel('ListItem.Duration'),
                      'MPAA': xbmc.getInfoLabel('ListItem.Mpaa'), 'Aired': xbmc.getInfoLabel('ListItem.Aired'),
                      'Season': xbmc.getInfoLabel('ListItem.Season'), 'Episode': xbmc.getInfoLabel('ListItem.Episode')}
-        liz.setInfo('video', info_list)
-        xbmcplugin.setResolvedUrl(int(sys.argv[1]), True, liz)
+        item.setInfo('video', info_list)
+        xbmcplugin.setResolvedUrl(int(sys.argv[1]), True, item)
